@@ -1,0 +1,563 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>The Scramble Book</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,800&family=Instrument+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap');
+
+  :root {
+    --bg: #0a1410;
+    --surface: #122620;
+    --surface-hi: #1a3a2e;
+    --gold: #c9a961;
+    --gold-dim: #8a7540;
+    --cream: #f5f0e6;
+    --muted: #8a9489;
+    --win: #5fa87f;
+    --loss: #c94a4a;
+    --border: #2a4a3e;
+    --border-hi: #3d5f51;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--cream);
+    font-family: 'Instrument Sans', sans-serif;
+    min-height: 100vh;
+    position: relative;
+    overflow-x: hidden;
+  }
+
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    opacity: 0.03;
+    z-index: 1;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence baseFrequency='0.9'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+
+  .container {
+    max-width: 640px;
+    margin: 0 auto;
+    padding: 2rem 1rem 6rem;
+    position: relative;
+    z-index: 2;
+  }
+
+  .display { font-family: 'Fraunces', serif; font-variation-settings: 'opsz' 144; letter-spacing: -0.02em; }
+  .mono { font-family: 'JetBrains Mono', monospace; }
+
+  .masthead {
+    padding-bottom: 1.5rem;
+    margin-bottom: 2rem;
+    border-bottom: 1px solid var(--border);
+  }
+  .eyebrow {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.3em;
+    color: var(--gold);
+    margin-bottom: 0.5rem;
+  }
+  .title {
+    font-family: 'Fraunces', serif;
+    font-size: clamp(2.25rem, 8vw, 3.5rem);
+    color: var(--cream);
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    line-height: 1;
+  }
+  .sub {
+    font-size: 0.8rem;
+    color: var(--muted);
+    margin-top: 0.5rem;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    flex-wrap: wrap;
+  }
+  .refresh-btn {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--cream);
+    padding: 0.4rem 0.75rem;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.2em;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .refresh-btn:hover { border-color: var(--gold); color: var(--gold); }
+  .refresh-btn:disabled { opacity: 0.5; cursor: wait; }
+
+  .tabs {
+    display: flex;
+    gap: 0;
+    margin-bottom: 1.5rem;
+    border-bottom: 1px solid var(--border);
+  }
+  .tab {
+    background: none;
+    border: none;
+    color: var(--muted);
+    padding: 0.75rem 1.25rem;
+    font-family: 'Instrument Sans', sans-serif;
+    font-size: 0.9rem;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
+    transition: all 0.15s;
+  }
+  .tab.active { color: var(--gold); border-bottom-color: var(--gold); }
+  .tab:hover:not(.active) { color: var(--cream); }
+
+  .stats {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.5rem;
+    margin-bottom: 1.5rem;
+  }
+  .stat {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    padding: 0.85rem;
+  }
+  .stat-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.2em;
+    color: var(--muted);
+    margin-bottom: 0.25rem;
+  }
+  .stat-value {
+    font-family: 'Fraunces', serif;
+    font-size: 1.75rem;
+    color: var(--gold);
+    line-height: 1;
+  }
+
+  .bet {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--gold);
+    padding: 0.85rem 1rem;
+    margin-bottom: 0.5rem;
+  }
+  .bet.meta { background: var(--surface-hi); margin-left: 1rem; }
+  .bet.settled { border-left-color: var(--win); }
+  .bet.voided { border-left-color: var(--muted); opacity: 0.7; }
+
+  .bet-head {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.5rem;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.15em;
+  }
+  .status { color: var(--gold); }
+  .status.settled { color: var(--win); }
+  .status.voided { color: var(--muted); }
+  .stake { color: var(--muted); margin-left: auto; }
+  .meta-tag { color: var(--muted); }
+
+  .matchup { font-size: 0.95rem; margin-bottom: 0.25rem; }
+  .matchup .name { color: var(--gold); font-weight: 500; }
+  .matchup .vs { color: var(--muted); margin: 0 0.4rem; }
+
+  .positions {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--muted);
+    margin-top: 0.5rem;
+    line-height: 1.5;
+  }
+  .positions .pp-name { color: var(--cream); }
+
+  .void-cond, .note {
+    font-size: 0.75rem;
+    color: var(--muted);
+    margin-top: 0.5rem;
+  }
+  .note { font-style: italic; }
+
+  .list {
+    background: var(--surface);
+    border: 1px solid var(--border);
+  }
+  .row {
+    display: flex;
+    align-items: center;
+    padding: 0.85rem 1rem;
+    border-bottom: 1px solid var(--border);
+    gap: 0.75rem;
+  }
+  .row:last-child { border-bottom: none; }
+  .rank {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--muted);
+    min-width: 1.5rem;
+  }
+  .player-name { flex: 1; color: var(--cream); }
+  .net {
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 500;
+  }
+  .net.pos { color: var(--win); }
+  .net.neg { color: var(--loss); }
+  .net.zero { color: var(--muted); }
+
+  .section-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.2em;
+    color: var(--muted);
+    margin: 1.5rem 0 0.5rem;
+  }
+
+  .settlement {
+    display: flex;
+    align-items: center;
+    padding: 0.85rem 1rem;
+    border-bottom: 1px solid var(--border);
+    gap: 0.75rem;
+  }
+  .settlement:last-child { border-bottom: none; }
+  .flow { flex: 1; font-size: 0.95rem; }
+  .flow .from { color: var(--loss); }
+  .flow .arrow { color: var(--muted); margin: 0 0.5rem; }
+  .flow .to { color: var(--win); }
+  .amount { color: var(--gold); font-family: 'JetBrains Mono', monospace; font-weight: 500; }
+
+  .empty {
+    text-align: center;
+    padding: 4rem 1rem;
+    color: var(--muted);
+  }
+  .empty .display { color: var(--cream); font-size: 1.25rem; margin-bottom: 0.25rem; }
+  .empty .body { font-size: 0.875rem; max-width: 20rem; margin: 0 auto; }
+
+  .error {
+    background: rgba(201, 74, 74, 0.1);
+    border: 1px solid var(--loss);
+    padding: 1rem;
+    margin-bottom: 1rem;
+    font-size: 0.85rem;
+    color: var(--loss);
+    line-height: 1.5;
+  }
+
+  .filter {
+    display: flex;
+    gap: 0.25rem;
+    margin-bottom: 1rem;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.2em;
+  }
+  .filter button {
+    background: none;
+    border: none;
+    color: var(--muted);
+    padding: 0.25rem 0.5rem;
+    cursor: pointer;
+    border-bottom: 1px solid transparent;
+  }
+  .filter button.active { color: var(--gold); border-bottom-color: var(--gold); }
+
+  .hidden { display: none !important; }
+
+  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+  .loading { animation: pulse 1.2s ease-in-out infinite; }
+</style>
+</head>
+<body>
+
+<div class="container">
+  <header class="masthead">
+    <div class="eyebrow">── THE SCRAMBLE BOOK ──</div>
+    <h1 class="title" id="tournament-name">The Scramble</h1>
+    <div class="sub">
+      <span id="last-updated">Loading…</span>
+      <button class="refresh-btn" id="refresh">↻ Refresh</button>
+    </div>
+  </header>
+
+  <div id="error-banner" class="error hidden"></div>
+
+  <nav class="tabs">
+    <button class="tab active" data-tab="bets">Bets</button>
+    <button class="tab" data-tab="ledger">Ledger</button>
+    <button class="tab" data-tab="settlements">Settlements</button>
+  </nav>
+
+  <section id="tab-bets">
+    <div class="filter">
+      <button class="active" data-filter="all">ALL</button>
+      <button data-filter="open">OPEN</button>
+      <button data-filter="settled">SETTLED</button>
+    </div>
+    <div id="bets-list"></div>
+  </section>
+
+  <section id="tab-ledger" class="hidden">
+    <div class="stats" id="stats"></div>
+    <div class="section-label">LEADERBOARD</div>
+    <div class="list" id="leaderboard"></div>
+  </section>
+
+  <section id="tab-settlements" class="hidden">
+    <div class="section-label">WHO PAYS WHO</div>
+    <div class="list" id="settlements-list"></div>
+  </section>
+</div>
+
+<script>
+/* ─────────────────────────────────────────────────────────────────────────
+   CONFIG — pointing at Ali's live Scramble Book
+   ──────────────────────────────────────────────────────────────────────── */
+const SHEET_ID = '1z4MTf2DNCvXAaNFVIsfkIphL8m_s1qs593uP74OmUiw';
+const TOURNAMENT_NAME = 'The Scramble';
+const REFRESH_INTERVAL_MS = 30_000;  // auto-refresh every 30s
+
+/* ─── State ───────────────────────────────────────────────────────────── */
+let state = { players: [], bets: [], lastUpdate: null, error: null };
+let currentTab = 'bets';
+let currentFilter = 'all';
+
+/* ─── Fetch Google Sheets via gviz (CSV) ──────────────────────────────── */
+async function fetchSheet(sheetName) {
+  const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(sheetName)}`;
+  const res = await fetch(url);
+  if (!res.ok) {
+    throw new Error(`Couldn't load "${sheetName}" tab (HTTP ${res.status}). Make sure the sheet is shared as "Anyone with the link can view" and the tab is named exactly "${sheetName}".`);
+  }
+  const csv = await res.text();
+  const parsed = Papa.parse(csv, { header: true, skipEmptyLines: true });
+  return parsed.data;
+}
+
+async function loadData() {
+  document.getElementById('refresh').disabled = true;
+  document.getElementById('refresh').textContent = '↻ Loading…';
+
+  try {
+    const [players, bets] = await Promise.all([
+      fetchSheet('Players'),
+      fetchSheet('Bets'),
+    ]);
+    state.players = players.filter(p => p.Name && p.Name.trim());
+    state.bets = bets.filter(b => b['Side A'] && b['Side A'].trim());
+    state.lastUpdate = new Date();
+    state.error = null;
+    document.getElementById('error-banner').classList.add('hidden');
+  } catch (e) {
+    state.error = e.message;
+    document.getElementById('error-banner').textContent = e.message;
+    document.getElementById('error-banner').classList.remove('hidden');
+  }
+
+  document.getElementById('refresh').disabled = false;
+  document.getElementById('refresh').textContent = '↻ Refresh';
+  updateLastUpdated();
+  render();
+}
+
+function updateLastUpdated() {
+  if (!state.lastUpdate) {
+    document.getElementById('last-updated').textContent = 'Loading…';
+    return;
+  }
+  const secs = Math.floor((Date.now() - state.lastUpdate) / 1000);
+  let text;
+  if (secs < 5) text = 'Updated just now';
+  else if (secs < 60) text = `Updated ${secs}s ago`;
+  else text = `Updated ${Math.floor(secs / 60)}m ago`;
+  document.getElementById('last-updated').textContent = text;
+}
+setInterval(updateLastUpdated, 5000);
+
+/* ─── Ledger math ─────────────────────────────────────────────────────── */
+function calcLedger() {
+  const net = Object.fromEntries(state.players.map(p => [p.Name, 0]));
+  const betCount = Object.fromEntries(state.players.map(p => [p.Name, 0]));
+  const pairwise = {};
+
+  state.bets.forEach(b => {
+    if (b.Status !== 'Settled') return;
+    const stake = Number(b.Stake) || 0;
+    const winner = b.Winner?.trim();
+    const sideA = b['Side A']?.trim();
+    const sideB = b['Side B']?.trim();
+    if (!winner || !sideA || !sideB) return;
+
+    const loser = winner === sideA ? sideB : sideA;
+    if (net[winner] !== undefined) { net[winner] += stake; betCount[winner]++; }
+    if (net[loser]  !== undefined) { net[loser]  -= stake; betCount[loser]++; }
+
+    const key = `${loser}>${winner}`;
+    pairwise[key] = (pairwise[key] || 0) + stake;
+  });
+
+  const simplified = [];
+  const seen = new Set();
+  Object.entries(pairwise).forEach(([key, amt]) => {
+    if (seen.has(key)) return;
+    const [a, b] = key.split('>');
+    const reverseKey = `${b}>${a}`;
+    const reverseAmt = pairwise[reverseKey] || 0;
+    seen.add(key);
+    seen.add(reverseKey);
+    if (amt > reverseAmt) simplified.push({ loser: a, winner: b, amount: amt - reverseAmt });
+    else if (reverseAmt > amt) simplified.push({ loser: b, winner: a, amount: reverseAmt - amt });
+  });
+  simplified.sort((x, y) => y.amount - x.amount);
+  return { net, betCount, simplified };
+}
+
+/* ─── Rendering ───────────────────────────────────────────────────────── */
+function render() {
+  document.getElementById('tournament-name').textContent = TOURNAMENT_NAME;
+
+  document.querySelectorAll('.tab').forEach(t => {
+    t.classList.toggle('active', t.dataset.tab === currentTab);
+  });
+  ['bets', 'ledger', 'settlements'].forEach(tab => {
+    document.getElementById(`tab-${tab}`).classList.toggle('hidden', tab !== currentTab);
+  });
+
+  if (currentTab === 'bets') renderBets();
+  if (currentTab === 'ledger') renderLedger();
+  if (currentTab === 'settlements') renderSettlements();
+}
+
+function renderBets() {
+  const container = document.getElementById('bets-list');
+  container.innerHTML = '';
+
+  document.querySelectorAll('.filter button').forEach(b => {
+    b.classList.toggle('active', b.dataset.filter === currentFilter);
+  });
+
+  const primary = state.bets.filter(b => !b['Parent #']);
+  const filtered = currentFilter === 'all'
+    ? primary
+    : primary.filter(b => (b.Status || '').toLowerCase() === currentFilter);
+
+  if (filtered.length === 0) {
+    container.innerHTML = `<div class="empty"><div class="display">${currentFilter === 'all' ? 'No bets yet' : `No ${currentFilter} bets`}</div><div class="body">Add a row to the Bets tab in Google Sheets to get started.</div></div>`;
+    return;
+  }
+
+  filtered.forEach(bet => {
+    container.appendChild(renderBetCard(bet));
+    const children = state.bets.filter(b => b['Parent #'] === bet['#']);
+    children.forEach(c => container.appendChild(renderBetCard(c, true)));
+  });
+}
+
+function renderBetCard(bet, isMeta = false) {
+  const div = document.createElement('div');
+  const status = (bet.Status || 'Open').toLowerCase();
+  div.className = `bet ${status}${isMeta ? ' meta' : ''}`;
+
+  const statusLabel = status === 'settled'
+    ? `${bet.Winner?.toUpperCase() || ''} WON`
+    : status.toUpperCase();
+
+  const stakeNum = Number(bet.Stake) || 0;
+
+  const matchup = isMeta
+    ? `<div class="matchup"><span class="name">${bet['Side A']}</span> picks <span class="mono">${bet["A's Pick / Position"]}</span><span class="vs"> · </span><span class="name">${bet['Side B']}</span> picks <span class="mono">${bet["B's Pick / Position"]}</span></div>`
+    : `<div class="matchup"><span class="name">${bet['Side A']}</span><span class="vs">vs</span><span class="name">${bet['Side B']}</span></div>
+       ${(bet["A's Pick / Position"] || bet["B's Pick / Position"]) ? `
+       <div class="positions">
+         ${bet["A's Pick / Position"] ? `<div><span class="pp-name">${bet['Side A']}:</span> ${bet["A's Pick / Position"]}</div>` : ''}
+         ${bet["B's Pick / Position"] ? `<div><span class="pp-name">${bet['Side B']}:</span> ${bet["B's Pick / Position"]}</div>` : ''}
+       </div>` : ''}`;
+
+  div.innerHTML = `
+    <div class="bet-head">
+      ${isMeta ? '<span class="meta-tag">⎿ META</span>' : ''}
+      <span class="status ${status}">${statusLabel}</span>
+      <span class="stake">$${stakeNum}</span>
+    </div>
+    ${matchup}
+    ${bet['Void If'] ? `<div class="void-cond">⚠ Void if: ${bet['Void If']}</div>` : ''}
+    ${bet.Note ? `<div class="note">"${bet.Note}"</div>` : ''}
+  `;
+  return div;
+}
+
+function renderLedger() {
+  const { net } = calcLedger();
+  const openCount = state.bets.filter(b => b.Status === 'Open').length;
+  const pot = state.bets.filter(b => b.Status === 'Settled').reduce((s, b) => s + (Number(b.Stake) || 0), 0);
+
+  document.getElementById('stats').innerHTML = `
+    <div class="stat"><div class="stat-label">PLAYERS</div><div class="stat-value">${state.players.length}</div></div>
+    <div class="stat"><div class="stat-label">OPEN</div><div class="stat-value">${openCount}</div></div>
+    <div class="stat"><div class="stat-label">POT</div><div class="stat-value">$${pot}</div></div>
+  `;
+
+  const ranked = [...state.players].sort((a, b) => (net[b.Name] || 0) - (net[a.Name] || 0));
+  const lb = document.getElementById('leaderboard');
+  if (ranked.length === 0) {
+    lb.innerHTML = `<div class="empty"><div class="display">No players</div><div class="body">Add names to the Players tab.</div></div>`;
+    return;
+  }
+  lb.innerHTML = ranked.map((p, i) => {
+    const n = net[p.Name] || 0;
+    const cls = n > 0 ? 'pos' : n < 0 ? 'neg' : 'zero';
+    const sign = n > 0 ? '+' : n < 0 ? '-' : '';
+    return `
+      <div class="row">
+        <div class="rank">${String(i + 1).padStart(2, '0')}</div>
+        <div class="player-name">${p.Name}</div>
+        <div class="net ${cls}">${sign}$${Math.abs(n)}</div>
+      </div>
+    `;
+  }).join('');
+}
+
+function renderSettlements() {
+  const { simplified } = calcLedger();
+  const container = document.getElementById('settlements-list');
+  if (simplified.length === 0) {
+    container.innerHTML = `<div class="empty"><div class="display">Nothing owed yet</div><div class="body">Settlements appear as bets are marked Settled in the sheet.</div></div>`;
+    return;
+  }
+  container.innerHTML = simplified.map(s => `
+    <div class="settlement">
+      <div class="flow"><span class="from">${s.loser}</span><span class="arrow">→</span><span class="to">${s.winner}</span></div>
+      <div class="amount">$${s.amount}</div>
+    </div>
+  `).join('');
+}
+
+/* ─── Event wiring ────────────────────────────────────────────────────── */
+document.querySelectorAll('.tab').forEach(t => {
+  t.addEventListener('click', () => { currentTab = t.dataset.tab; render(); });
+});
+document.querySelectorAll('.filter button').forEach(b => {
+  b.addEventListener('click', () => { currentFilter = b.dataset.filter; render(); });
+});
+document.getElementById('refresh').addEventListener('click', loadData);
+
+/* ─── Boot ─────────────────────────────────────────────────────────────── */
+loadData();
+if (REFRESH_INTERVAL_MS > 0) {
+  setInterval(loadData, REFRESH_INTERVAL_MS);
+}
+</script>
+</body>
+</html>
